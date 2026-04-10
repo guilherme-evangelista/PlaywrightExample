@@ -33,7 +33,7 @@ npx playwright test --ui
 ```
 
 ## 📊 Relatórios
-A configuração global do projeto está parametrizada para capturar o estado da aplicação de forma inteligente (retain-on-failure). O relatório HTML é gerado automaticamente.
+A configuração global do projeto está parametrizada para capturar o estado da aplicação de forma inteligente (retain-on-failure). O relatório HTML é gerado automaticamente com os vídeos anexados.
 
 Se um teste quebrar, o Playwright anexará automaticamente no relatório:
 

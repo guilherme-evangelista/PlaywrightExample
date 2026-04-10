@@ -12,14 +12,15 @@ export default defineConfig({
   reporter: 'html', 
   
   use: {
-    headless: false, 
+    headless: !!process.env.CI, 
+    
     viewport: { width: 1920, height: 1080 },
     launchOptions: {
       args: ['--window-size=1920,1080', '--window-position=0,0']
     },
     trace: 'retain-on-failure', 
     screenshot: 'only-on-failure',
-    video: 'on', 
+    video: 'on',
   },
 
   projects: [
