@@ -26,6 +26,10 @@ jobs:
     - name: 🌐 Instalar navegadores do Playwright e dependências do Linux
       run: npx playwright install --with-deps chromium
 
+    # 👇 ADICIONE ESTE NOVO PASSO AQUI 👇
+    - name: 🧩 Gerar arquivos de teste do BDD
+      run: npx bddgen
+
     - name: 🎭 Executar os testes (Playwright + BDD)
       run: npx playwright test
 
@@ -35,4 +39,4 @@ jobs:
       with:
         name: playwright-report
         path: playwright-report/
-        retention-days: 30 
+        retention-days: 30
