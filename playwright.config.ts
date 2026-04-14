@@ -9,7 +9,7 @@ const testDir = defineBddConfig({
 export default defineConfig({
   testDir, 
   timeout: 15 * 1000, 
-  reporter: 'html', 
+  reporter: [['html'], ['json', { outputFile: 'playwright-report/results.json' }]],
   
   use: {
     headless: !!process.env.CI, 
