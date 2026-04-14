@@ -12,31 +12,27 @@
     "maxFailures": 0,
     "metadata": {
       "ci": {
-        "commitHref": "https://github.com/guilherme-evangelista/PlaywrightExample/commit/fb517c8837b7372231948b00d810b5b6d2192d66",
-        "commitHash": "fb517c8837b7372231948b00d810b5b6d2192d66",
-        "prHref": "https://github.com/guilherme-evangelista/PlaywrightExample/pull/1",
-        "prTitle": "feat: integrando projeto com o grafana",
-        "prBaseHash": "48960dae4275f7786e8205cb8592589e206bde8d",
-        "buildHref": "https://github.com/guilherme-evangelista/PlaywrightExample/actions/runs/24409886339"
+        "commitHref": "https://github.com/guilherme-evangelista/PlaywrightExample/commit/113dbad4d56377035c41229856ff42e11e6f9bf5",
+        "commitHash": "113dbad4d56377035c41229856ff42e11e6f9bf5",
+        "buildHref": "https://github.com/guilherme-evangelista/PlaywrightExample/actions/runs/24409911378"
       },
       "gitCommit": {
-        "shortHash": "fb517c8",
-        "hash": "fb517c8837b7372231948b00d810b5b6d2192d66",
-        "subject": "Merge 73b2f74dab6c84077cc31ea69667380afc50a79b into 48960dae4275f7786e8205cb8592589e206bde8d",
-        "body": "Merge 73b2f74dab6c84077cc31ea69667380afc50a79b into 48960dae4275f7786e8205cb8592589e206bde8d\n",
+        "shortHash": "113dbad",
+        "hash": "113dbad4d56377035c41229856ff42e11e6f9bf5",
+        "subject": "Merge pull request #1 from guilherme-evangelista/feature/grafana",
+        "body": "Merge pull request #1 from guilherme-evangelista/feature/grafana\n\nfeat: integrando projeto com o grafana",
         "author": {
           "name": "Guilherme Evangelista",
           "email": "ggomes61.gg@gmail.com",
-          "time": 1776182998000
+          "time": 1776183029000
         },
         "committer": {
           "name": "GitHub",
           "email": "noreply@github.com",
-          "time": 1776182998000
+          "time": 1776183029000
         },
-        "branch": "HEAD"
+        "branch": "main"
       },
-      "gitDiff": "diff --git a/.github/workflows/playwright.yml b/.github/workflows/playwright.yml\nindex 8917410..e45a1f9 100644\n--- a/.github/workflows/playwright.yml\n+++ b/.github/workflows/playwright.yml\n@@ -29,13 +29,22 @@ jobs:\n     - name: 🌐 Instalar navegadores do Playwright e dependências do Linux\n       run: npx playwright install --with-deps chromium\n \n-    # 👇 ADICIONE ESTE NOVO PASSO AQUI 👇\n     - name: 🧩 Gerar arquivos de teste do BDD\n       run: npx bddgen\n \n     - name: 🎭 Executar os testes (Playwright + BDD)\n       run: npx playwright test\n \n+    - name: 📈 Enviar métricas para o Banco de Dados (Para o Grafana)\n+      if: always()\n+      env:\n+        INFLUX_URL: ${{ secrets.INFLUX_URL }}\n+        INFLUX_ORG: ${{ secrets.INFLUX_ORG }}\n+        INFLUX_TOKEN: ${{ secrets.INFLUX_TOKEN }}\n+        COMMIT_HASH: ${{ github.sha }}\n+        BRANCH_NAME: ${{ github.ref_name }}\n+      run: node scripts/send-metrics.js\n+\n     - name: 📊 Salvar o Relatório HTML (Artifacts)\n       uses: actions/upload-artifact@v4\n       if: always()\ndiff --git a/playwright.config.ts b/playwright.config.ts\nindex d763ca9..d326e50 100644\n--- a/playwright.config.ts\n+++ b/playwright.config.ts\n@@ -9,7 +9,7 @@ const testDir = defineBddConfig({\n export default defineConfig({\n   testDir, \n   timeout: 15 * 1000, \n-  reporter: 'html', \n+  reporter: [['html'], ['json', { outputFile: 'playwright-report/results.json' }]],\n   \n   use: {\n     headless: !!process.env.CI, \ndiff --git a/scripts/send-metrics.js b/scripts/send-metrics.js\nnew file mode 100644\nindex 0000000..cca5204\n--- /dev/null\n+++ b/scripts/send-metrics.js\n@@ -0,0 +1,51 @@\n+const fs = require('fs');\n+\n+const INFLUX_URL = process.env.INFLUX_URL;\n+const INFLUX_ORG = process.env.INFLUX_ORG;\n+const INFLUX_TOKEN = process.env.INFLUX_TOKEN;\n+const BUCKET = 'test_metrics';\n+\n+const COMMIT_HASH = process.env.COMMIT_HASH || 'local';\n+const BRANCH_NAME = process.env.BRANCH_NAME || 'local';\n+\n+async function sendMetrics() {\n+  try {\n+    const resultsPath = './playwright-report/results.json';\n+    if (!fs.existsSync(resultsPath)) {\n+        throw new Error(`Arquivo de resultados não encontrado em: ${resultsPath}`);\n+    }\n+    const results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));\n+\n+    const passed = results.stats.expected || 0;\n+    const failed = results.stats.unexpected || 0;\n+    const flaky = results.stats.flaky || 0;\n+    const totalTests = passed + failed + flaky;\n+    const duration = Math.round(results.stats.duration || 0);\n+\n+    const lineProtocolData = `playwright_tests,branch=${BRANCH_NAME},commit=${COMMIT_HASH} total=${totalTests}i,passed=${passed}i,failed=${failed}i,duration=${duration}i`;\n+\n+    console.log('Enviando dados para o InfluxDB:', lineProtocolData);\n+\n+    const response = await fetch(`${INFLUX_URL}/api/v2/write?org=${INFLUX_ORG}&bucket=${BUCKET}&precision=ms`, {\n+      method: 'POST',\n+      headers: {\n+        'Authorization': `Token ${INFLUX_TOKEN}`,\n+        'Content-Type': 'text/plain; charset=utf-8',\n+        'Accept': 'application/json'\n+      },\n+      body: lineProtocolData\n+    });\n+\n+    if (!response.ok) {\n+      const errorText = await response.text();\n+      throw new Error(`Erro HTTP ${response.status}: ${errorText}`);\n+    }\n+\n+    console.log('✅ Métricas enviadas com sucesso e prontas para o Grafana!');\n+  } catch (error) {\n+    console.error('❌ Erro ao enviar métricas:', error.message);\n+    process.exit(1); \n+  }\n+}\n+\n+sendMetrics();\n\\ No newline at end of file",
       "actualWorkers": 1
     },
     "preserveOutput": "always",
@@ -47,31 +43,27 @@
         "retries": 0,
         "metadata": {
           "ci": {
-            "commitHref": "https://github.com/guilherme-evangelista/PlaywrightExample/commit/fb517c8837b7372231948b00d810b5b6d2192d66",
-            "commitHash": "fb517c8837b7372231948b00d810b5b6d2192d66",
-            "prHref": "https://github.com/guilherme-evangelista/PlaywrightExample/pull/1",
-            "prTitle": "feat: integrando projeto com o grafana",
-            "prBaseHash": "48960dae4275f7786e8205cb8592589e206bde8d",
-            "buildHref": "https://github.com/guilherme-evangelista/PlaywrightExample/actions/runs/24409886339"
+            "commitHref": "https://github.com/guilherme-evangelista/PlaywrightExample/commit/113dbad4d56377035c41229856ff42e11e6f9bf5",
+            "commitHash": "113dbad4d56377035c41229856ff42e11e6f9bf5",
+            "buildHref": "https://github.com/guilherme-evangelista/PlaywrightExample/actions/runs/24409911378"
           },
           "gitCommit": {
-            "shortHash": "fb517c8",
-            "hash": "fb517c8837b7372231948b00d810b5b6d2192d66",
-            "subject": "Merge 73b2f74dab6c84077cc31ea69667380afc50a79b into 48960dae4275f7786e8205cb8592589e206bde8d",
-            "body": "Merge 73b2f74dab6c84077cc31ea69667380afc50a79b into 48960dae4275f7786e8205cb8592589e206bde8d\n",
+            "shortHash": "113dbad",
+            "hash": "113dbad4d56377035c41229856ff42e11e6f9bf5",
+            "subject": "Merge pull request #1 from guilherme-evangelista/feature/grafana",
+            "body": "Merge pull request #1 from guilherme-evangelista/feature/grafana\n\nfeat: integrando projeto com o grafana",
             "author": {
               "name": "Guilherme Evangelista",
               "email": "ggomes61.gg@gmail.com",
-              "time": 1776182998000
+              "time": 1776183029000
             },
             "committer": {
               "name": "GitHub",
               "email": "noreply@github.com",
-              "time": 1776182998000
+              "time": 1776183029000
             },
-            "branch": "HEAD"
+            "branch": "main"
           },
-          "gitDiff": "diff --git a/.github/workflows/playwright.yml b/.github/workflows/playwright.yml\nindex 8917410..e45a1f9 100644\n--- a/.github/workflows/playwright.yml\n+++ b/.github/workflows/playwright.yml\n@@ -29,13 +29,22 @@ jobs:\n     - name: 🌐 Instalar navegadores do Playwright e dependências do Linux\n       run: npx playwright install --with-deps chromium\n \n-    # 👇 ADICIONE ESTE NOVO PASSO AQUI 👇\n     - name: 🧩 Gerar arquivos de teste do BDD\n       run: npx bddgen\n \n     - name: 🎭 Executar os testes (Playwright + BDD)\n       run: npx playwright test\n \n+    - name: 📈 Enviar métricas para o Banco de Dados (Para o Grafana)\n+      if: always()\n+      env:\n+        INFLUX_URL: ${{ secrets.INFLUX_URL }}\n+        INFLUX_ORG: ${{ secrets.INFLUX_ORG }}\n+        INFLUX_TOKEN: ${{ secrets.INFLUX_TOKEN }}\n+        COMMIT_HASH: ${{ github.sha }}\n+        BRANCH_NAME: ${{ github.ref_name }}\n+      run: node scripts/send-metrics.js\n+\n     - name: 📊 Salvar o Relatório HTML (Artifacts)\n       uses: actions/upload-artifact@v4\n       if: always()\ndiff --git a/playwright.config.ts b/playwright.config.ts\nindex d763ca9..d326e50 100644\n--- a/playwright.config.ts\n+++ b/playwright.config.ts\n@@ -9,7 +9,7 @@ const testDir = defineBddConfig({\n export default defineConfig({\n   testDir, \n   timeout: 15 * 1000, \n-  reporter: 'html', \n+  reporter: [['html'], ['json', { outputFile: 'playwright-report/results.json' }]],\n   \n   use: {\n     headless: !!process.env.CI, \ndiff --git a/scripts/send-metrics.js b/scripts/send-metrics.js\nnew file mode 100644\nindex 0000000..cca5204\n--- /dev/null\n+++ b/scripts/send-metrics.js\n@@ -0,0 +1,51 @@\n+const fs = require('fs');\n+\n+const INFLUX_URL = process.env.INFLUX_URL;\n+const INFLUX_ORG = process.env.INFLUX_ORG;\n+const INFLUX_TOKEN = process.env.INFLUX_TOKEN;\n+const BUCKET = 'test_metrics';\n+\n+const COMMIT_HASH = process.env.COMMIT_HASH || 'local';\n+const BRANCH_NAME = process.env.BRANCH_NAME || 'local';\n+\n+async function sendMetrics() {\n+  try {\n+    const resultsPath = './playwright-report/results.json';\n+    if (!fs.existsSync(resultsPath)) {\n+        throw new Error(`Arquivo de resultados não encontrado em: ${resultsPath}`);\n+    }\n+    const results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));\n+\n+    const passed = results.stats.expected || 0;\n+    const failed = results.stats.unexpected || 0;\n+    const flaky = results.stats.flaky || 0;\n+    const totalTests = passed + failed + flaky;\n+    const duration = Math.round(results.stats.duration || 0);\n+\n+    const lineProtocolData = `playwright_tests,branch=${BRANCH_NAME},commit=${COMMIT_HASH} total=${totalTests}i,passed=${passed}i,failed=${failed}i,duration=${duration}i`;\n+\n+    console.log('Enviando dados para o InfluxDB:', lineProtocolData);\n+\n+    const response = await fetch(`${INFLUX_URL}/api/v2/write?org=${INFLUX_ORG}&bucket=${BUCKET}&precision=ms`, {\n+      method: 'POST',\n+      headers: {\n+        'Authorization': `Token ${INFLUX_TOKEN}`,\n+        'Content-Type': 'text/plain; charset=utf-8',\n+        'Accept': 'application/json'\n+      },\n+      body: lineProtocolData\n+    });\n+\n+    if (!response.ok) {\n+      const errorText = await response.text();\n+      throw new Error(`Erro HTTP ${response.status}: ${errorText}`);\n+    }\n+\n+    console.log('✅ Métricas enviadas com sucesso e prontas para o Grafana!');\n+  } catch (error) {\n+    console.error('❌ Erro ao enviar métricas:', error.message);\n+    process.exit(1); \n+  }\n+}\n+\n+sendMetrics();\n\\ No newline at end of file",
           "actualWorkers": 1
         },
         "id": "chromium",
@@ -139,7 +131,7 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1423,
+                      "duration": 1641,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
@@ -147,10 +139,10 @@
                       "steps": [
                         {
                           "title": "Então a URL atual deve ser a correta",
-                          "duration": 63
+                          "duration": 52
                         }
                       ],
-                      "startTime": "2026-04-14T16:10:42.446Z",
+                      "startTime": "2026-04-14T16:11:14.175Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -185,7 +177,7 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1240,
+                      "duration": 1424,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
@@ -193,14 +185,14 @@
                       "steps": [
                         {
                           "title": "Quando clico no botão clique aqui",
-                          "duration": 291
+                          "duration": 342
                         },
                         {
                           "title": "Então valido que o botão clique aqui possui \"1\" clique",
-                          "duration": 23
+                          "duration": 31
                         }
                       ],
-                      "startTime": "2026-04-14T16:10:44.109Z",
+                      "startTime": "2026-04-14T16:11:17.585Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -235,7 +227,7 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1407,
+                      "duration": 1524,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
@@ -243,14 +235,14 @@
                       "steps": [
                         {
                           "title": "Quando clico no botão duplo clique",
-                          "duration": 299
+                          "duration": 512
                         },
                         {
                           "title": "Então valido que o botão duplo clique possui \"1\" clique",
-                          "duration": 31
+                          "duration": 21
                         }
                       ],
-                      "startTime": "2026-04-14T16:10:45.372Z",
+                      "startTime": "2026-04-14T16:11:19.033Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -285,7 +277,7 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1555,
+                      "duration": 1294,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
@@ -293,14 +285,14 @@
                       "steps": [
                         {
                           "title": "Quando escrevo no campo de texto \"teste\"",
-                          "duration": 194
+                          "duration": 179
                         },
                         {
                           "title": "Então valido que o campo de texto possui digitado \"teste\"",
-                          "duration": 77
+                          "duration": 45
                         }
                       ],
-                      "startTime": "2026-04-14T16:10:46.799Z",
+                      "startTime": "2026-04-14T16:11:20.577Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -335,7 +327,7 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1725,
+                      "duration": 1522,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
@@ -343,14 +335,14 @@
                       "steps": [
                         {
                           "title": "Quando seleciono a opcao no dropdown de framework \"playwright\"",
-                          "duration": 747
+                          "duration": 617
                         },
                         {
                           "title": "Então valido que o dropdown de framework exibe a opcao \"Playwright\"",
-                          "duration": 28
+                          "duration": 19
                         }
                       ],
-                      "startTime": "2026-04-14T16:10:48.380Z",
+                      "startTime": "2026-04-14T16:11:21.892Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -385,7 +377,7 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1640,
+                      "duration": 1432,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
@@ -393,14 +385,14 @@
                       "steps": [
                         {
                           "title": "Quando altero o valor do slider para \"80\"",
-                          "duration": 705
+                          "duration": 598
                         },
                         {
                           "title": "Então valido que o slider possui o valor \"80\"",
-                          "duration": 19
+                          "duration": 21
                         }
                       ],
-                      "startTime": "2026-04-14T16:10:50.131Z",
+                      "startTime": "2026-04-14T16:11:23.435Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -435,7 +427,7 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1595,
+                      "duration": 1415,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
@@ -443,14 +435,14 @@
                       "steps": [
                         {
                           "title": "Quando clico no interruptor",
-                          "duration": 555
+                          "duration": 478
                         },
                         {
                           "title": "Então valido que o interruptor esta ativado",
-                          "duration": 69
+                          "duration": 41
                         }
                       ],
-                      "startTime": "2026-04-14T16:10:51.792Z",
+                      "startTime": "2026-04-14T16:11:24.886Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -485,7 +477,7 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1640,
+                      "duration": 1597,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
@@ -493,18 +485,18 @@
                       "steps": [
                         {
                           "title": "Quando clico no interruptor",
-                          "duration": 469
+                          "duration": 529
                         },
                         {
                           "title": "Quando clico no interruptor",
-                          "duration": 117
+                          "duration": 145
                         },
                         {
                           "title": "Então valido que o interruptor esta desativado",
-                          "duration": 17
+                          "duration": 22
                         }
                       ],
-                      "startTime": "2026-04-14T16:10:53.407Z",
+                      "startTime": "2026-04-14T16:11:26.325Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -530,8 +522,8 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-04-14T16:10:41.565Z",
-    "duration": 13562.694,
+    "startTime": "2026-04-14T16:11:13.450Z",
+    "duration": 14565.93,
     "expected": 8,
     "skipped": 0,
     "unexpected": 0,
