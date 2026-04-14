@@ -35,16 +35,6 @@ jobs:
     - name: 🎭 Executar os testes (Playwright + BDD)
       run: npx playwright test
 
-    - name: 📈 Enviar métricas para o Banco de Dados (Para o Grafana)
-      if: always()
-      env:
-        INFLUX_URL: ${{ secrets.INFLUX_URL }}
-        INFLUX_ORG: ${{ secrets.INFLUX_ORG }}
-        INFLUX_TOKEN: ${{ secrets.INFLUX_TOKEN }}
-        COMMIT_HASH: ${{ github.sha }}
-        BRANCH_NAME: ${{ github.ref_name }}
-      run: node scripts/send-metrics.js
-
     - name: 📊 Salvar o Relatório HTML (Artifacts)
       uses: actions/upload-artifact@v4
       if: always()
