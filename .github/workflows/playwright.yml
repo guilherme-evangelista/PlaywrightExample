@@ -29,21 +29,12 @@ jobs:
     - name: 🌐 Instalar navegadores do Playwright e dependências do Linux
       run: npx playwright install --with-deps chromium
 
+    # 👇 ADICIONE ESTE NOVO PASSO AQUI 👇
     - name: 🧩 Gerar arquivos de teste do BDD
       run: npx bddgen
 
     - name: 🎭 Executar os testes (Playwright + BDD)
       run: npx playwright test
-
-    - name: 📈 Enviar métricas para o Banco de Dados (Para o Grafana)
-      if: always()
-      env:
-        INFLUX_URL: ${{ secrets.INFLUX_URL }}
-        INFLUX_ORG: ${{ secrets.INFLUX_ORG }}
-        INFLUX_TOKEN: ${{ secrets.INFLUX_TOKEN }}
-        COMMIT_HASH: ${{ github.sha }}
-        BRANCH_NAME: ${{ github.ref_name }}
-      run: node scripts/send-metrics.js
 
     - name: 📊 Salvar o Relatório HTML (Artifacts)
       uses: actions/upload-artifact@v4
