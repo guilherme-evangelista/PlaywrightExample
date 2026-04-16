@@ -1,6 +1,6 @@
 # 🎭 Automação E2E: Playwright + BDD
 
-[![Pipeline Status](https://github.com/guilherme-evangelista/PlaywrightExample/actions/workflows/playwright.yml/badge.svg)](https://github.com/guilherme-evangelista/PlaywrightExample/actions)
+[![Pipeline Status](https://github.com/guilherme-evangelista/playwright-example/actions/workflows/playwright.yml/badge.svg)](https://github.com/guilherme-evangelista/playwright-example/actions)
 [![Playwright Report](https://img.shields.io/badge/Playwright-HTML_Report-2EAD33?logo=playwright)](https://guilherme-evangelista.github.io/playwright-example/)
 
 Automação de interface para [QA Playground](https://playground-for-qa.vercel.app/playground) com **Playwright**, **TypeScript** e **BDD** (`playwright-bdd`). Usa Page Object Model (POM) e `BasePage` abstrata.
